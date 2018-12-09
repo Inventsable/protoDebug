@@ -1,8 +1,17 @@
 var csInterface = new CSInterface();
 loadUniversalJSXLibraries();
-loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
+// loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
 window.Event = new Vue();
 
+// var testScript = csInterface.getSystemPath(SystemPath.EXTENSION) + '/host.jsx';
+
+csInterface.addEventListener('console', function (evt) {
+  console.log('Caught console')
+  console.log(evt);
+  Event.$emit('console.log', JSON.stringify(evt));
+});
+
+// Overring wake/sleep state to wake only
 Vue.component('protodebug', {
   template: `
     <div class="appGrid" @mouseover="wakeApp" @mouseout="sleepApp">
@@ -17,6 +26,7 @@ Vue.component('protodebug', {
             <user-stats />
           </stats>
           <sys-info v-if="showSystem" />
+          <console-info v-if="showConsole" />
         </top>
         <bottom v-if="showDebug" />
       </screen>
@@ -24,6 +34,7 @@ Vue.component('protodebug', {
   `,
   data() {
     return {
+      wakeOnly: true,
       showFoot: false,
     }
   },
@@ -31,6 +42,7 @@ Vue.component('protodebug', {
     showSize: function() { return this.$root.showSize },
     showUser: function () { return this.$root.showUser },
     showSystem: function () { return this.$root.showSystem },
+    showConsole: function () { return this.$root.showConsole },
     showDebug: function () { return this.$root.showDebug },
   },
   methods: {
@@ -39,8 +51,13 @@ Vue.component('protodebug', {
       Event.$emit('startStats');
     },
     sleepApp() {
-      this.$root.sleep();
-      Event.$emit('clearStats');
+      if (this.wakeOnly) {
+        this.wakeApp();
+        Event.$emit('clearStats');
+      } else {
+        this.$root.sleep();
+        Event.$emit('clearStats');
+      }
     }
   }
 })
@@ -112,7 +129,8 @@ Vue.component('mouse-stats', {
   },
   methods: {
     clearStats() {
-      // 
+      this.$root.mousex = 0;
+      this.$root.mouseY = 0;
     },
     getClass() {
       if (this.isWake)
@@ -120,6 +138,9 @@ Vue.component('mouse-stats', {
       else
         return 'mouse-pos-idle';
     }
+  },
+  mounted() {
+    Event.$on('clearStats', this.clearStats);
   }
 })
 
@@ -242,13 +263,6 @@ Vue.component('sys-info', {
         wrap="off"
         :placeholder="OS"
         rows="2">{{fulldata}}</textarea>
-      <div 
-        v-if="isLegacy"
-        :contenteditable="isWake"
-        spellcheck="false"
-        :class="isWake ? 'system-info-active' : 'system-info-idle'">
-        {{fulldata}}
-      </div>
     </div>
   `,
   data() {
@@ -283,6 +297,78 @@ Vue.component('sys-info', {
   },
   mounted() {
     this.startInfo();
+  }
+})
+
+Vue.component('console-info', {
+  template: `
+    <div class="console-info">
+      <textarea 
+        v-if="!isLegacy"
+        :class="isWake ? 'console-info-active' : 'console-info-idle'"
+        spellcheck="false"
+        wrap="on"
+        :placeholder="OS"
+        rows="2">{{info}}</textarea>
+      <textarea 
+        v-if="!isLegacy"
+        :class="isWake ? 'console-info-active' : 'console-info-idle'"
+        spellcheck="false"
+        wrap="off"
+        placeholder="extension path"
+        rows="1">{{extensionPath}}</textarea>
+      <div class="file-stats">
+        <textarea 
+          v-if="!isLegacy"
+          :class="isWake ? 'console-info-active' : 'console-info-idle'"
+          spellcheck="false"
+          wrap="off"
+          placeholder="document path"
+          rows="1">{{documentPath}}</textarea>  
+        <textarea 
+          v-if="!isLegacy"
+          :class="isWake ? 'console-info-active' : 'console-info-idle'"
+          spellcheck="false"
+          wrap="off"
+          placeholder="document name"
+          rows="1">{{documentName}}</textarea>  
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      isLegacy: false,
+      info: '',
+      infoList: [],
+      OS: 'console.log()',
+      extensionPath: '',
+      documentPath: '',
+      documentName: '',
+    }
+  },
+  computed: {
+    isWake: function () { return this.$root.isWake },
+    fulldata: function () {
+      return this.info.replace(/\r?\n/g, '<br />')
+    }
+  },
+  methods: {
+    setInfo(evt) {
+      evt = JSON.parse(evt);
+      console.log(evt)
+      this.infoList = [];
+      this.extensionPath = evt.extensionId;
+      var fileInfo = evt.appId.split(',');
+      this.documentPath = fileInfo[0];
+      this.documentName = fileInfo[1];
+      // this.extensionId = /[^/]*$/.exec(evt.extensionId)[0];
+      this.info = evt.data;
+    }
+  },
+  mounted() {
+    Event.$on('console.log', this.setInfo);
+    var extId = csInterface.getSystemPath(SystemPath.EXTENSION);
+    csInterface.evalScript(`setExt('${extId}')`)
   }
 })
 
@@ -340,7 +426,7 @@ Vue.component('event-manager', {
         this.$root.panelWidth = document.documentElement.clientWidth;
         this.$root.panelHeight = document.documentElement.clientHeight;
         // this.setPanelCSSHeight();
-        console.log(evt);
+        // console.log(evt);
       } else {
         this.$root.panelWidth = document.documentElement.clientWidth;
         this.$root.panelHeight = document.documentElement.clientHeight;
@@ -393,7 +479,7 @@ Vue.component('event-manager', {
         Event.$emit('newAction', 'Click-drag')
       } else {
         if (((this.lastMouseX <= this.$root.mouseX + 6) && (this.lastMouseX >= this.$root.mouseX - 6)) && ((this.lastMouseY <= this.$root.mouseY + 6) && (this.lastMouseY >= this.$root.mouseY - 6)))
-          console.log('Testing')
+          var nothing = '';
         else 
           Event.$emit('newAction', 'Mouse move');
       }
@@ -607,7 +693,7 @@ Vue.component('scribe-maker', {
     },
     constructEvent() {
       console.log(`Should be sending ${this.msg}`);
-      this.dispatchEvent(this.name, this.msg);
+      this.$root.dispatchEvent(this.name, this.msg);
     },
     setScribeType(name) {
       console.log('Setting scribe type')
@@ -677,18 +763,13 @@ Vue.component('scribe', {
     clearScribe() {
       this.msg = '';
     },
-    dispatchEvent(name, data) {
-      var event = new CSEvent(name, 'APPLICATION');
-      event.data = data;
-      csInterface.dispatchEvent(event);
-    },
     setMsg(data) {
       console.log(data)
       this.msg = data.data;
     },
     constructEvent() {
       console.log(`Should be sending ${this.msg} to ${this.name}`);
-      this.dispatchEvent(this.name, this.msg);
+      this.$root.dispatchEvent(this.name, this.msg);
     },
   },
   computed: {
@@ -701,10 +782,15 @@ Vue.component('scribe', {
   },
   mounted() {
     var self = this;
-    console.log(`${this.name} : ${this.version}`)
+    // console.log(`${this.name} : ${this.version}`)
     if (this.version == 'listener') {
-      console.log('This is a listener')
       csInterface.addEventListener(this.name, this.setMsg);
+      if (this.name == 'console.log') {
+        var root = csInterface.getSystemPath(SystemPath.EXTENSION) + "/host/universal/";
+        csInterface.evalScript('$.evalFile("' + root + 'Console.jsx")');
+      }
+        // csInterface.evalScript()
+      // console.log('This is a listener')
     } else {
       Event.$on('dispatchEvent', self.constructEvent);
     }
@@ -820,6 +906,7 @@ var app = new Vue({
     showSize: true,
     showUser: true,
     showSystem: true,
+    showConsole: true,
     showDebug: true,
     isWake: false,
     Shift: false,
@@ -836,8 +923,10 @@ var app = new Vue({
         { id: "showSize", label: "Show Size", enabled: true, checkable: true, checked: true, },
         { id: "showUser", label: "Show User", enabled: true, checkable: true, checked: true, },
         { id: "showSystem", label: "Show System", enabled: true, checkable: true, checked: true, },
+        { id: "showConsole", label: "Show Console", enabled: true, checkable: true, checked: true, },
         { id: "showDebug", label: "Show Debug", enabled: true, checkable: true, checked: true, },
         { label: "---" },
+        { id: "test", label: "Run test", enabled: true, checkable: false, checked: false, },
         { id: "about", label: "Go to Homepage", enabled: true, checkable: false, checked: false, },
       ],
     },
@@ -868,6 +957,11 @@ var app = new Vue({
     Event.$on('addScribe', self.addScribe);
   },
   methods: {
+    dispatchEvent(name, data) {
+      var event = new CSEvent(name, 'APPLICATION');
+      event.data = data;
+      csInterface.dispatchEvent(event);
+    },
     checkExisting(data) {
       var result = this.findScribe(data);
       if (result < 0) {
@@ -924,8 +1018,10 @@ var app = new Vue({
         this.context.menu[3].checked = this.showUser;
         this.showSystem = JSON.parse(storage.getItem('showSystem'));
         this.context.menu[4].checked = this.showSystem;
+        this.showConsole = JSON.parse(storage.getItem('showConsole'));
+        this.context.menu[5].checked = this.showConsole;
         this.showDebug = JSON.parse(storage.getItem('showDebug'));
-        this.context.menu[5].checked = this.showDebug;
+        this.context.menu[6].checked = this.showDebug;
       }
       Event.$emit('rebuildEvents');
     },
@@ -938,6 +1034,7 @@ var app = new Vue({
       storage.setItem('showSize', this.showSize);
       storage.setItem('showUser', this.showUser);
       storage.setItem('showSystem', this.showSystem);
+      storage.setItem('showConsole', this.showConsole);
       storage.setItem('showDebug', this.showDebug);
       storage.setItem('theme', self.activeTheme);
       console.log(storage)
@@ -952,6 +1049,12 @@ var app = new Vue({
         location.reload();
       } else if (id == 'homepage') {
         console.log('Go to github')
+      } else if (id == 'test') {
+        console.log(id)
+        // console.log(testScript)
+        // csInterface.evalScript(`runScript('${testScript}')`);
+        loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
+
       } else {
         this[id] = !this[id];
         var target = this.findMenuItemById(id);

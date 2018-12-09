@@ -3,10 +3,7 @@
 
   var csInterface = new CSInterface();
 
-  csInterface.addEventListener('console', function(evt) {
-    console.log('Host > ' + evt.data);
-  });
-
+  
   csInterface.addEventListener('mighty.rollcall', function(evt) {
     dispatchEvent('mighty.rollanswer', extFolder())
   });

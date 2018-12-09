@@ -78,9 +78,10 @@ svg {
 }
 
 .window-size {
-  /* position: absolute; */
-  /* top: 0px; */
-  /* left: 0px; */
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  opacity: .5;
   display: flex;
   justify-content: flex-end;
   width: 100%;
@@ -132,20 +133,59 @@ svg {
   margin: 0px .25rem;
   padding: .5rem .5rem;
 }
+.file-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-column-gap: .5rem;
+  margin-right: .5rem;
+  width: 100%;
+}
 
-.system-info-active, .texter-active {
+.console-info {
+  margin-top: .5rem;
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  font-size: 1rem;
+  font-family: 'Rubik';
+}
+
+[class^="console-info-"] {
+  width: 100%;
+  border-style: solid;
+  border-width: 0px;
+  border-radius: .25rem;
+  margin: 0px .25rem;
+  padding: .5rem .5rem;
+  margin-top: .5rem;
+  /* overflow-x: auto; */
+}
+
+.file-stats > [class^="console-info-"] {
+  box-sizing: border-box;
+  width: 100%;
+  border-style: solid;
+  border-width: 0px;
+  border-radius: .25rem;
+  margin: 0px .25rem;
+  padding: .5rem .5rem;
+  margin-top: .5rem;
+  /* overflow-x: auto; */
+}
+
+.system-info-active, .console-info-active, .texter-active {
   border-color: var(--color-border);
   background-color: var(--color-input-idle);
   color: var(--color-text-default);
   transition: all 80ms var(--quad) 20ms;
 }
-.system-info-idle, .texter-idle {
+.system-info-idle, .console-info-idle, .texter-idle {
   border-color: var(--color-text-disabled);
   background-color: var(--color-button-disabled);
   color: var(--color-text-disabled);
   transition: all 80ms var(--quad) 20ms;
 }
-.system-info-active:focus, .system-info-idle:focus, .texter-active:focus, .texter-idle:focus {
+.system-info-active:focus, .system-info-idle:focus, .console-info-active:focus, .console-info-idle:focus, .texter-active:focus, .texter-idle:focus {
   background-color: var(--color-input-focus);
   color: var(--color-text-active);
 }
@@ -285,10 +325,24 @@ textarea {
   }
 }
 
+@media screen and (max-height:200px) {
+  .file-stats {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+    grid-row-gap: .5rem;
+    grid-column-gap: .5rem;
+    margin-right: .5rem;
+    width: 100%;
+  }
+}
+
+
 @media screen and (max-width:130px) {
   [class*="statgrid"] {
     display: none;
   }
+  
   .stat-groups {
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: 1fr;
