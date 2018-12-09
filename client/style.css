@@ -10,6 +10,44 @@ svg {
   transition: all 80ms var(--quad) 20ms;
 }
 
+.toggleWrap {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+[class^="toggle-icon-"] {
+  width: 1.8rem;
+  height: 1.8rem;
+  margin-right: .5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+.toggle-icon-active {
+  /* border-width: 1.35px;
+  border-style: solid;
+  border-color: var(--color-selection); */
+}
+
+.icon-cancel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin: 0px .5rem;
+}
+
+.icon-cancel:hover {
+  cursor: pointer;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin: 0px .5rem;
+}
+
 .screen {
   display: flex;
   flex-direction: column;
@@ -139,9 +177,29 @@ textarea {
 }
 
 .icon {
+  display: block;
   width: 1.8rem;
   height: 1.8rem;
+  min-width: 1.8rem;
+  min-height: 1.8rem;
   margin-right: .5rem;
+}
+
+.eventList {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  /* overflow-y: auto;
+  overflow-x: hidden; */
+}
+
+.footer {
+  padding-bottom: .5rem;
+  /* position: absolute;
+  top: calc(var(--panel-height) - 2rem);
+  width: calc(100% - 2.5rem);
+  background-color: var(--color-bg);
+  z-index: 10; */
 }
 
 [class^="mouse-pos-"] {
@@ -192,7 +250,7 @@ textarea {
 }
 
 [class^="texter-"] {
-  width: calc(100% - 2.5rem);
+  width: calc(100% - 5rem);
   border-style: solid;
   border-width: 0px;
   border-radius: .25rem;

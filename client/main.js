@@ -18,10 +18,7 @@ Vue.component('protodebug', {
           </stats>
           <sys-info v-if="showSystem" />
         </top>
-        <bottom v-if="showDebug">
-          <scribe name="debug.write" version="listener" />
-          <scribe name="debug.write" version="sender" />
-        </bottom>
+        <bottom v-if="showDebug" />
       </screen>
     </div>
   `,
@@ -51,7 +48,32 @@ Vue.component('protodebug', {
 Vue.component('screen', { template: `<div class="screen"><slot></slot></div>` })
 Vue.component('stats', { template: `<div class="stat-groups"><slot></slot></div>` })
 Vue.component('top', { template: `<div class="appTop"><slot></slot></div>` })
-Vue.component('bottom', { template: `<div class="appBottom"><slot></slot></div>` })
+Vue.component('bottom', {
+  template: `
+    <div class="appBottom">
+      <div class="eventlist">
+        <scribe v-for="(event, key) in eventList" :key="key" :name="event.name" :version="event.version" />
+      </div>
+      <div class="footer">
+        <scribe-maker />
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      eventList: []
+    }
+  },
+  methods: {
+    rebuildEvents() {
+      this.eventList = this.$root.eventList;
+    }
+  },
+  mounted() {
+    this.rebuildEvents();
+    Event.$on('rebuildEvents', this.rebuildEvents)
+  }
+})
 
 Vue.component('window-size', {
   template: `
@@ -304,6 +326,7 @@ Vue.component('event-manager', {
   },
   methods: {
     setPanelCSSHeight() {
+      this.$root.setCSS('evt-height', `${this.$root.panelHeight - 50}px`);
       this.$root.setCSS('panel-height', `${this.$root.panelHeight - 20}px`);
     },
     appThemeChanged(event) {
@@ -397,12 +420,102 @@ Vue.component('event-manager', {
   },
 })
 
+Vue.component('toggle-icon', {
+  data() {
+    return {
+      status: [
+        {
+          name: 'listener', 
+          isActive: true,
+        },
+        {
+          name: 'sender',
+          isActive: false,
+        },
+      ]
+    }
+  },
+  template: `
+    <div class="toggleWrap">
+      <div v-for="type in status" @click="setActive(type)" :class="checkIfActive(type)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+          <path v-if="type.name == 'listener'" :style="iconColor(type)" d="M19,17H9V7H19ZM31,7V17H41V7Zm0,14a6,6,0,0,1-6,6,6,6,0,0,1-6-6V19H9v8a16,16,0,0,0,32,0V19H31Z"/>
+          <path v-if="type.name == 'sender'" :style="iconColor(type)" d="M34.76,22.47h-6.4a1.18,1.18,0,0,1-1.11-1.56L32.57,5.55a.47.47,0,0,0-.81-.45L15.14,26.27a1.22,1.22,0,0,0,1,2h6.36a1.18,1.18,0,0,1,1.11,1.57L18.33,44.45a.48.48,0,0,0,.82.45L35.7,24.45A1.22,1.22,0,0,0,34.76,22.47Z"/>
+        </svg>
+      </div>
+    </div>
+  `,
+  computed: {
+    iconClass: function () {
+      return this.$root.isWake ? `toggle-icon-active` : `toggle-icon-idle`;
+    }
+  },
+  mounted() {
+    this.findActive();
+    Event.$on('toggleScribeType', this.toggleType);
+  },
+  methods: {
+    toggleType() {
+      for (var i = 0; i < this.status.length; i++) {
+        var target = this.status[i];
+        target.isActive = !target.isActive;
+      }
+    },
+    setActive(type) {
+      if (!type.isActive) {
+        this.clearActive();
+        type.isActive = true;
+        Event.$emit('activeScribe', type.name);
+      }
+    },
+    clearActive() {
+      for (var i = 0; i < this.status.length; i++) {
+        var target = this.status[i];
+        target.isActive = false;
+      }
+    },
+    findActive() {
+      for (var i = 0; i < this.status.length; i++) {
+        var target = this.status[i];
+        if (target.isActive)
+          Event.$emit('activeScribe', target.name);
+      }
+    },
+    iconColor(type) {
+      var style = '';
+      if (this.$root.isWake) {
+        if (type.isActive)
+          style = `fill: ${this.$root.getCSS('color-selection')}` 
+        else
+          style = `fill: ${this.$root.getCSS('color-icon')}` 
+      } else {
+        style = `fill: ${this.$root.getCSS('color-text-disabled')}`;
+      } 
+      return style;
+    },
+    checkIfActive(type) {
+      if (type.isActive) {
+        return 'toggle-icon-active'
+      } else {
+        return 'toggle-icon-idle'
+      }
+    },
+  }
+})
+
 Vue.component('icon', {
   props: {
     type: String,
+    parent: String,
+    which: String,
+    canceller: String,
   },
   template: `
-    <div class="icon">
+    <div 
+      :class="type == 'cancel' ? 'icon-cancel' : 'icon'" 
+      @mouseover="hover = true" 
+      @mouseout="hover = false" 
+      @click="deleteScribe">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
         <title>{{type}}</title>
         <polygon v-if="type == 'cursor'" :style="iconColor" points="13.29 44.41 25.48 32.37 42.51 32.37 13.29 3 13.29 44.41"/>
@@ -410,13 +523,115 @@ Vue.component('icon', {
         <path v-if="type == 'user'" :style="iconColor" d="M34,16a9,9,0,1,1-9-9A9,9,0,0,1,34,16Zm8.06,25.74-2.41-8.43A8.72,8.72,0,0,0,31.27,27H18.73a8.72,8.72,0,0,0-8.38,6.31L7.94,41.74A2.55,2.55,0,0,0,10.39,45H39.61A2.55,2.55,0,0,0,42.06,41.74Z"/>
         <path v-if="type == 'listener'" :style="iconColor" d="M19,17H9V7H19ZM31,7V17H41V7Zm0,14a6,6,0,0,1-6,6,6,6,0,0,1-6-6V19H9v8a16,16,0,0,0,32,0V19H31Z"/>
         <path v-if="type == 'sender'" :style="iconColor" d="M34.76,22.47h-6.4a1.18,1.18,0,0,1-1.11-1.56L32.57,5.55a.47.47,0,0,0-.81-.45L15.14,26.27a1.22,1.22,0,0,0,1,2h6.36a1.18,1.18,0,0,1,1.11,1.57L18.33,44.45a.48.48,0,0,0,.82.45L35.7,24.45A1.22,1.22,0,0,0,34.76,22.47Z"/>
+        <path v-if="type == 'cancel'"  :style="iconColor" d="M29.24,25,41.12,13.12a3,3,0,0,0-4.24-4.24L25,20.76,13.12,8.88a3,3,0,0,0-4.24,4.24L20.76,25,8.88,36.88a3,3,0,0,0,0,4.24,3,3,0,0,0,4.24,0L25,29.24,36.88,41.12a3,3,0,0,0,4.24,0,3,3,0,0,0,0-4.24Z"/>
       </svg>
     </div>
   `,
+  data() {
+    return {
+      hover: false,
+    }
+  },
   computed: {
     iconColor: function() {
-      return this.$root.isWake ? `fill: ${this.$root.getCSS('color-icon')}` : `fill: ${this.$root.getCSS('color-text-disabled')}`;
+      if (this.$root.isWake) {
+        if ((this.type == 'cancel') && (this.hover)) {
+          return `fill: ${this.$root.getCSS('color-cancel')}`;
+        } else {
+          return `fill: ${this.$root.getCSS('color-icon')}`;
+        }
+      } else {
+        return `fill: ${this.$root.getCSS('color-text-disabled')}`;
+      }
     }
+  },
+  methods: {
+    deleteScribe() {
+      if (this.canceller == 'true') {
+        console.log(`Deleting ${this.which} of ${this.parent}`)
+        Event.$emit('deleteScribe', [this.parent, this.which])
+      }
+    },
+  }
+})
+
+Vue.component('scribe-maker', {
+  props: {
+    version: String,
+    name: String,
+  },
+  template: `
+    <div v-if="show" class="texter">
+      <toggle-icon />
+      <input 
+        ref="input"
+        :class="getClass()"
+        @keyup.enter="submitTest(msg)"
+        v-model="msg" 
+        :placeholder="placeholder"/>
+    </div>
+  `,
+  data() {
+    return {
+      show: true,
+      msg: '',
+      clone: 'listener',
+      placeholder: 'Create new listener',
+    }
+  },
+  methods: {
+    getClass() {
+      return this.isWake ? 'texter-active' : 'texter-idle'
+    },
+    submitTest(msg) {
+      if (msg.length) {
+        if (this.$root.Ctrl) {
+          console.log('Change');
+          Event.$emit('toggleScribeType');
+        } else {
+          var construct = [this.msg, this.clone];
+          Event.$emit('checkScribe', construct);
+        }
+      } else if (this.$root.Ctrl) {
+        Event.$emit('toggleScribeType');
+      }
+    },
+    verifyTest() {
+      console.log(`Construct ${this.clone} for ${this.msg}`)
+      var construct = [this.msg, this.clone];
+      this.msg = '';
+      Event.$emit('addScribe', construct);
+    },
+    clearScribe() {
+      this.msg = '';
+    },
+    constructEvent() {
+      console.log(`Should be sending ${this.msg}`);
+      this.dispatchEvent(this.name, this.msg);
+    },
+    setScribeType(name) {
+      console.log('Setting scribe type')
+      this.clone = name;
+      this.placeholder = `Create new ${name}`;
+    },
+    toggleType() {
+      if (this.clone == 'listener') 
+        this.clone = 'sender'
+      else
+        this.clone = 'listener';
+      this.placeholder = `Create new ${this.clone}`;
+    }
+  },
+  computed: {
+    isWake: function () {
+      return this.$root.isWake;
+    },
+  },
+  mounted() {
+    var self = this;
+    Event.$on('activeScribe', this.setScribeType);
+    Event.$on('verifyTest', this.verifyTest);
+    Event.$on('toggleScribeType', this.toggleType);
   }
 })
 
@@ -427,13 +642,14 @@ Vue.component('scribe', {
   },
   template: `
     <div v-if="show" class="texter">
-      <icon :type="version" />
+      <icon :type="version" :parent="name" canceller="false"/>
       <input 
         ref="input"
         :class="getClass()"
         @keyup.enter="submitTest(msg)" 
         v-model="msg" 
         :placeholder="placeholder"/>
+      <icon type="cancel" :parent="name" canceller="true" :which="version"/>
     </div>
   `,
   data() {
@@ -454,6 +670,7 @@ Vue.component('scribe', {
     },
     submitTest(msg) {
       if ((msg.length) && (this.version == 'sender')) {
+        console.log(`Checking event for ${this.name}, ${this.msg}`)
         this.constructEvent();
       }
     },
@@ -470,7 +687,7 @@ Vue.component('scribe', {
       this.msg = data.data;
     },
     constructEvent() {
-      console.log(`Should be sending ${this.msg}`);
+      console.log(`Should be sending ${this.msg} to ${this.name}`);
       this.dispatchEvent(this.name, this.msg);
     },
   },
@@ -484,10 +701,12 @@ Vue.component('scribe', {
   },
   mounted() {
     var self = this;
+    console.log(`${this.name} : ${this.version}`)
     if (this.version == 'listener') {
-      csInterface.addEventListener(self.name, self.setMsg);
+      console.log('This is a listener')
+      csInterface.addEventListener(this.name, this.setMsg);
     } else {
-      Event.$on('dispatchEvent', self.constructEvent)
+      Event.$on('dispatchEvent', self.constructEvent);
     }
   }
 })
@@ -606,6 +825,10 @@ var app = new Vue({
     Shift: false,
     Ctrl: false,
     Alt: false,
+    eventList: [
+      { name: 'debug.write', version: 'listener' },
+      { name: 'debug.write', version: 'sender' },
+    ],
     context: {
       menu: [
         { id: "refresh", label: "Refresh panel", enabled: true, checkable: false, checked: false, },
@@ -640,10 +863,50 @@ var app = new Vue({
     // this.appThemeChanged();
     Event.$on('modsUpdate', self.parseModifiers);
     Event.$on('updateStorage', self.updateStorage);
+    Event.$on('deleteScribe', self.deleteScribe);
+    Event.$on('checkScribe', self.checkExisting);
+    Event.$on('addScribe', self.addScribe);
   },
   methods: {
+    checkExisting(data) {
+      var result = this.findScribe(data);
+      if (result < 0) {
+        Event.$emit('verifyTest', true)
+      } else {
+        console.log('Construct already exists')
+      }
+    },
+    findScribe(data) {
+      if (data.length) {
+        for (var i = 0; i < this.eventList.length; i++) {
+          var target = this.eventList[i];
+          if ((target.name == data[0]) && (target.version == data[1])) {
+            return i;
+          }
+        }
+        return -1;
+      }
+    },
+    deleteScribe(data) {
+      let index = this.findScribe(data);
+      if (index >= 0) {
+        this.eventList.splice(index, 1);
+        this.updateStorage();
+        Event.$emit('rebuildEvents');
+      }
+    },
+    addScribe(data) {
+      var child = {
+        name: data[0],
+        version: data[1],
+      }
+      this.eventList.push(child);
+      Event.$emit('rebuildEvents');
+      this.updateStorage();
+    },
     startStorage(storage) {
       storage.setItem('contextmenu', JSON.stringify(this.context.menu));
+      storage.setItem('eventList', JSON.stringify(self.eventList));
       // storage.setItem('persistent', JSON.stringify(false));
     },
     readStorage() {
@@ -653,6 +916,7 @@ var app = new Vue({
       } else {
         console.log('Detected previous session data');
         this.context.menu = JSON.parse(storage.getItem('contextmenu'));
+        this.eventList = JSON.parse(storage.getItem('eventList'));
         console.log(storage)
         this.showSize = JSON.parse(storage.getItem('showSize'));
         this.context.menu[2].checked = this.showSize;
@@ -663,45 +927,35 @@ var app = new Vue({
         this.showDebug = JSON.parse(storage.getItem('showDebug'));
         this.context.menu[5].checked = this.showDebug;
       }
+      Event.$emit('rebuildEvents');
     },
     updateStorage() {
       var storage = window.localStorage, self = this;
-      console.log(this.context.menu)
+      console.log('Updating local storage')
       storage.setItem('contextmenu', JSON.stringify(self.context.menu));
+      storage.setItem('eventList', JSON.stringify(self.eventList));
       storage.setItem('persistent', JSON.stringify(self.persistent));
       storage.setItem('showSize', this.showSize);
       storage.setItem('showUser', this.showUser);
       storage.setItem('showSystem', this.showSystem);
       storage.setItem('showDebug', this.showDebug);
       storage.setItem('theme', self.activeTheme);
-      console.log(`Updating local storage:
-        Persistent: ${this.persistent}
-        Theme: ${this.activeTheme}`)
+      console.log(storage)
     },
     setContextMenu() {
       var self = this;
-      console.log(this.context)
       csInterface.setContextMenuByJSON(self.menuString, self.contextMenuClicked);
-      // csInterface.updateContextMenuItem('showSize', true, self.showSize);
-      // csInterface.updateContextMenuItem('showUser', true, self.showUser);
-      // csInterface.updateContextMenuItem('showSystem', true, self.showSystem);
-      // csInterface.updateContextMenuItem('showDebug', true, self.showSystem);
     },
     contextMenuClicked(id) {
       var target = this.findMenuItemById(id), parent = this.findMenuItemById(id, true);
-      console.log(`${target} : ${parent}`)
       if (id == "refresh") {
         location.reload();
       } else if (id == 'homepage') {
         console.log('Go to github')
       } else {
-        console.log(`tried ${id} with ${this[id]}`)
         this[id] = !this[id];
-        console.log(`tried ${id} with ${this[id]}`)
         var target = this.findMenuItemById(id);
         target.checked = this[id];
-        console.log(target.checked);
-        // csInterface.updateContextMenuItem('showSize', true, self.showSize);
       }
       this.updateStorage();
     },
@@ -733,24 +987,6 @@ var app = new Vue({
         }
       }
     },
-    // appThemeChanged(event) {
-    //   var skinInfo = JSON.parse(window.__adobe_cep__.getHostEnvironment()).appSkinInfo;
-    //   // this.findTheme(skinInfo);
-    //   console.log('Detected theme change')
-    //   Event.$emit('findTheme', skinInfo);
-    // },
-    // handleResize(evt) {
-    //   if (this.$root.activeApp == 'AEFT') {
-    //     // console.log(`w: ${this.panelWidth}, h: ${this.panelHeight}`);
-    //     this.panelHeight = document.documentElement.clientHeight;
-    //     // this.setPanelCSSHeight();
-    //     console.log(evt);
-    //   } else {
-    //     this.panelWidth = document.documentElement.clientWidth;
-    //     this.panelHeight = document.documentElement.clientHeight;
-    //     this.setPanelCSSHeight();
-    //   }
-    // },
     parseModifiers(evt) {
       // console.log(evt)
       var lastMods = [this.Ctrl, this.Shift, this.Alt]
