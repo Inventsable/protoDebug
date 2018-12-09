@@ -20,9 +20,6 @@ git clone https://github.com/Inventsable/protoDebug.git
 
 ## Scribe component listens and sends CSEvents to/from other panels
 
-![](https://thumbs.gfycat.com/DapperFewAsianelephant-size_restricted.gif)
-
-
 ``` javascript
 Vue.component('your-component', {
     template: `
