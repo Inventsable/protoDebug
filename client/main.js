@@ -1,14 +1,55 @@
+// FINISH REAL-TIME LINK
+// Construct object with essential info like name, mousepos, panel dimensions, listeners and receivers.
+
+// Query target panel with SetInterval from protoDebug to send a CSEvent response, protoDebug then
+// reads the CSEvent and substitutes it's own $root values for them.
+
 var csInterface = new CSInterface();
 loadUniversalJSXLibraries();
-// loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
+loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
 window.Event = new Vue();
-
-// var testScript = csInterface.getSystemPath(SystemPath.EXTENSION) + '/host.jsx';
 
 csInterface.addEventListener('console', function (evt) {
   console.log('Caught console')
   console.log(evt);
   Event.$emit('console.log', JSON.stringify(evt));
+});
+
+// csInterface.addEventListener('debug.sender', function (evt) {
+//   console.log('Caught global sender')
+//   console.log(evt);
+//   // var clone = JSON.parse(evt.data);
+//   // console.log(clone);
+//   Event.$emit('debug.link');
+//   // Event.$emit('console.log', JSON.stringify(evt));
+// });
+
+csInterface.addEventListener('debug.bounce', function(evt) {
+  console.log('Caught bounce')
+  console.log(evt.data);
+});
+
+csInterface.addEventListener('debug.link', function(evt) {
+  Event.$emit('debug.start', evt);
+});
+
+csInterface.addEventListener('debug.target', function (evt) {
+  Event.$emit('debug.target', evt);
+});
+
+csInterface.addEventListener('debug.unlink', function(evt) {
+  console.log('Check unlink');
+  Event.$emit('requestUnlink', evt);
+});
+
+csInterface.addEventListener('debug.listen', function (evt) {
+  console.log('Caught global listener')
+  Event.$emit('console.full', evt);
+  console.log(evt)
+  var clone = JSON.parse(evt.data);
+  Event.$emit('updateClone', clone);
+  // Event.$on('debug.listen', self.startLink);
+  // Event.$emit('console.log', JSON.stringify(evt));
 });
 
 // Overring wake/sleep state to wake only
@@ -20,6 +61,7 @@ Vue.component('protodebug', {
       <screen>
         <top>
           <window-size v-if="showSize" />
+          <link-data v-if="showUser"/>
           <stats v-if="showUser">
             <mouse-stats />
             <key-stats />
@@ -40,6 +82,7 @@ Vue.component('protodebug', {
   },
   computed: {
     showSize: function() { return this.$root.showSize },
+    // showDebug: function () { return this.$root.showDebug },
     showUser: function () { return this.$root.showUser },
     showSystem: function () { return this.$root.showSystem },
     showConsole: function () { return this.$root.showConsole },
@@ -92,6 +135,135 @@ Vue.component('bottom', {
   }
 })
 
+Vue.component('link-data', {
+  template: `
+    <div class="link-wrap">
+      <div class="link-name" :style="ifLinked()">{{fullmsg}}</div>
+    </div>
+  `,
+  data() {
+    return {
+      msg: 'Hello link',
+      linkName: 'none',
+      fullmsg: '',
+      hasTarget: false,
+      clone: {},
+      targetName: '',
+    }
+  },
+  methods: {
+    ifLinked() {
+      var style = 'color: ';
+      if (this.$root.isLinking) {
+        style += this.$root.getCSS('color-text-default');
+
+      } else {
+        style += this.$root.getCSS('color-text-disabled');
+        this.fullmsg = 'Not currently linked';
+      }
+      return style;
+    },
+    killLink() {
+      // console.log('Stopping link');
+      this.$root.setCSS('color-debug', 'transparent');
+      this.$root.isLinking = false;
+      this.fullmsg = 'Live debug disabled'
+      this.$root.dispatchEvent('debug.off', 'Test message')
+      console.log('Turn master scanning off');
+    },
+    startLink() {
+      this.$root.isLinking = true;
+      let style = this.$root.getCSS('color-selection');
+      this.$root.setCSS('color-debug', style);
+      // this.fullmsg = 'Live debug enabled';
+      console.log('Start scanning data');
+      this.$root.dispatchEvent('debug.on', 'Test message')
+    },
+    listenLink(msg) {
+      console.log('Received message for link:');
+      console.log(msg);
+    },
+    sendLink() {
+      console.log('Attempting to start link');
+      // this.$root.dispatchEvent('')
+    },
+    createLink(name) {
+      this.targetName = name;
+      this.$root.hasLink = true;
+      let style = this.$root.getCSS('color-selection');
+      this.$root.setCSS('color-debug', style);
+    },
+    breakLink() {
+      this.$root.hasLink = false;
+      this.$root.setCSS('color-debug', 'transparent');
+    },
+    checkLink() {
+      if ((this.$root.isLinking) && (this.$root.hasLink)) {
+        console.log('This should break individual link')
+        this.breakLink();
+        // Event.$emit('breakLink');
+      } else if (this.$root.isLinking) {
+        console.log('This is scanning with no link')
+        // console.log('This should break individual link')
+        // this.breakLink();
+      } else {
+        console.log('This is not scanning or linked')
+        // Event.$emit('debug.stop');
+      }
+    },
+    targetLink(targname) {
+      console.log(`Target is ${targname}`);
+      if (this.$root.isLinking) {
+        console.log(this.$root.hasLink);
+        if (targname.length) {
+          this.createLink(targname);
+        }
+      }
+    },
+    checkClone(clone) {
+      if ((clone.length) && (clone.name == this.targetName)) {
+        console.log(this.$root.hasLink);
+        console.log('Checking clone...');
+        console.log('Same name')
+      }
+    },
+    updateClone(obj) {
+      this.checkClone(obj);
+      // this.linkName = obj.name;
+      // console.log(this.linkName);
+      this.fullmsg = `Syncing with ${obj.name}`
+      for (let [key,value] of Object.entries(obj)) {
+        if (/mouse|panel|last/.test(key)) {
+          console.log(`${key} : ${value}`)
+          this.$root[key] = value;
+        }
+      }
+
+      Event.$emit('reClone');
+    },
+  },
+  computed: {
+    isWake: function () { return this.$root.isWake },
+    panelW: function () { return this.$root.panelWidth; },
+    panelH: function () { return this.$root.panelHeight; },
+    mouseX: function () { return this.$root.mouseX; },
+    mouseY: function () { return this.$root.mouseY; },
+  },
+  mounted() {
+    Event.$on('requestUnlink', this.checkLink);
+    Event.$on('debug.start', this.startLink);
+    Event.$on('debug.target', this.targetLink);
+    Event.$on('debug.stop', this.killLink);
+    Event.$on('updateClone', this.updateClone);
+    if (this.$root.isLinking)
+      this.fullmsg = 'Live debug enabled';
+    else
+      this.fullmsg = 'Live debug disabled';
+    // Event.$on('debug.listen', this.listenLink);
+    // Event.$on('debug.send', this.sendLink);
+  }
+})
+
 Vue.component('window-size', {
   template: `
     <div class="window-size">
@@ -114,20 +286,26 @@ Vue.component('mouse-stats', {
     <div class="mouse-statwrap">
       <icon type="cursor"></icon>
       <div class="mouse-statgrid">
-        <div v-if="!isWake" class="mouse-pos-idle" style="padding-left:1rem;">Outside</div>
         <div v-if="isWake" :class="isWake ? 'mouse-pos-active' : 'mouse-pos-idle'">{{mouseX}}</div>
         <div v-if="isWake" :class="isWake ? 'mouse-pos-active' : 'mouse-pos-idle'">{{divider}}</div>
         <div v-if="isWake" :class="isWake ? 'mouse-pos-active' : 'mouse-pos-idle'">{{mouseY}}</div>
       </div>
     </div>
   `,
+  // <div v-if="(!isWake) && (!isLinking)" class="mouse-pos-idle" style="padding-left:1rem;">Outside</div>
   computed: {
     mouseX: function () { return this.$root.mouseX; },
     mouseY: function () { return this.$root.mouseY; },
     isWake: function () { return this.$root.isWake; },
+    isLinking: function () { return this.$root.isLinking; },
     divider: function() { return this.$root.isWake ? 'x' : '' }
   },
   methods: {
+    reClone() {
+      // obj = JSON.parse(obj);
+      // this.$root.mouseX = obj.mouseX;
+      // this.$root.mouseY = obj.mouseY;
+    },
     clearStats() {
       this.$root.mousex = 0;
       this.$root.mouseY = 0;
@@ -141,6 +319,7 @@ Vue.component('mouse-stats', {
   },
   mounted() {
     Event.$on('clearStats', this.clearStats);
+    Event.$on('reClone', this.reClone);
   }
 })
 
@@ -168,10 +347,14 @@ Vue.component('key-stats', {
     Event.$on('keypress', this.getLastKey);
     Event.$on('clearStats', this.clearStats);
     Event.$on('startStats', this.startStats);
+    Event.$on('reClone', this.reClone);
   },
   methods: {
+    reClone(obj) {
+      this.lastKey = this.$root.lastKey;
+    },
     clearStats() {
-      this.lastKey = 'Outside';
+      this.lastKey = 'No keys pressed';
     },
     startStats() {
       this.lastKey = 'No keys pressed';
@@ -215,6 +398,7 @@ Vue.component('key-stats', {
           stack.push(msg);
           this.lastKey = stack.join('+')
         }
+        this.$root.lastKey = this.lastKey;
       }
     },
   }
@@ -239,9 +423,13 @@ Vue.component('user-stats', {
   },
   mounted() {
     Event.$on('newAction', this.setAction);
+    Event.$on('reClone', this.reClone);
     Event.$on('clearStats', this.clearStats);
   },
   methods: {
+    reClone() {
+      this.lastAction = this.$root.lastAction;
+    },
     clearStats() {
       this.lastAction = 'No action'
     },
@@ -308,8 +496,9 @@ Vue.component('console-info', {
         :class="isWake ? 'console-info-active' : 'console-info-idle'"
         spellcheck="false"
         wrap="on"
+        id="mainconsole"
         :placeholder="OS"
-        rows="2">{{info}}</textarea>
+        :rows="isLinking ? 8 : 8">{{info}}</textarea>
       <textarea 
         v-if="!isLegacy"
         :class="isWake ? 'console-info-active' : 'console-info-idle'"
@@ -348,6 +537,7 @@ Vue.component('console-info', {
   },
   computed: {
     isWake: function () { return this.$root.isWake },
+    isLinking: function () { return this.$root.isLinking },
     fulldata: function () {
       return this.info.replace(/\r?\n/g, '<br />')
     }
@@ -363,10 +553,14 @@ Vue.component('console-info', {
       this.documentName = fileInfo[1];
       // this.extensionId = /[^/]*$/.exec(evt.extensionId)[0];
       this.info = evt.data;
+    },
+    fullInfo(msg) {
+      this.info = msg.data;
     }
   },
   mounted() {
     Event.$on('console.log', this.setInfo);
+    Event.$on('console.full', this.fullInfo);
     var extId = csInterface.getSystemPath(SystemPath.EXTENSION);
     csInterface.evalScript(`setExt('${extId}')`)
   }
@@ -422,30 +616,31 @@ Vue.component('event-manager', {
     },
     handleResize(evt) {
       if (this.$root.activeApp == 'AEFT') {
-        // console.log(`w: ${this.panelWidth}, h: ${this.panelHeight}`);
         this.$root.panelWidth = document.documentElement.clientWidth;
         this.$root.panelHeight = document.documentElement.clientHeight;
-        // this.setPanelCSSHeight();
-        // console.log(evt);
       } else {
-        this.$root.panelWidth = document.documentElement.clientWidth;
-        this.$root.panelHeight = document.documentElement.clientHeight;
-        this.setPanelCSSHeight();
+        if (!this.isLinking) {
+          this.$root.panelWidth = document.documentElement.clientWidth;
+          this.$root.panelHeight = document.documentElement.clientHeight;
+          this.setPanelCSSHeight();
+        } else {
+          // external data
+        }
       }
     },
     activeMods() {
-      var mirror = [], child = {};
-      if (this.Ctrl)
-        child = { name: 'Ctrl', key: 0 }, mirror.push(child);
-      if (this.Shift) {
-        child = { name: 'Shift', key: 1 }
-        mirror.push(child);
+      if (!this.isLinking) {
+        let mirror = [], child = {};
+        if (this.Ctrl)
+          child = { name: 'Ctrl', key: 0 }, mirror.push(child);
+        if (this.Shift)
+          child = { name: 'Shift', key: 1 }, mirror.push(child);
+        if (this.Alt)
+          child = { name: 'Alt', key: 2 }, mirror.push(child);
+        this.activeList = mirror;
+      } else {
+        // external data
       }
-      if (this.Alt) {
-        child = { name: 'Alt', key: 2 }
-        mirror.push(child);
-      }
-      this.activeList = mirror;
     },
     clearMods() {
       this.Shift = false, this.Alt = false, this.Ctrl = false;
@@ -456,49 +651,72 @@ Vue.component('event-manager', {
       this.activeMods();
     },
     onMouseDown(e, el) {
-      this.$root.isDragging = true, this.wasDragging = false;
-      this.lastMouseX = this.$root.mouseX, this.lastMouseY = this.$root.mouseY;
+      if (!this.$root.isLinking) {
+        this.$root.isDragging = true, this.wasDragging = false;
+        this.lastMouseX = this.$root.mouseX, this.lastMouseY = this.$root.mouseY;
+      } else {
+        // External data
+      }
     },
     onMouseUp(e, el) {
-      if (this.$root.isDragging) {
-        if (((this.lastMouseX <= this.$root.mouseX + 6) && (this.lastMouseX >= this.$root.mouseX - 6)) && ((this.lastMouseY <= this.$root.mouseY + 6) && (this.lastMouseY >= this.$root.mouseY - 6))) {
-          this.wasDragging = false;
+      if (!this.$root.isLinking) {
+        if (this.$root.isDragging) {
+          if (((this.lastMouseX <= this.$root.mouseX + 6) && (this.lastMouseX >= this.$root.mouseX - 6)) && ((this.lastMouseY <= this.$root.mouseY + 6) && (this.lastMouseY >= this.$root.mouseY - 6))) {
+            this.wasDragging = false;
+          } else {
+            Event.$emit('newAction', 'Click/Drag');
+            this.wasDragging = true;
+          }
+          this.$root.isDragging = false;
         } else {
-          Event.$emit('newAction', 'Click/Drag');
-          this.wasDragging = true;
-          // this.$root.gesture = `Dragged from [${this.lastMouseX}, ${this.lastMouseY}] to [${this.mouseX}, ${this.mouseY}]`
+          // Event.$emit('newAction', 'Drag release');
         }
-        this.$root.isDragging = false;
       } else {
-        // Event.$emit('newAction', 'Drag release');
+        // External data
       }
     },
     onMouseMove(e, el) {
-      this.$root.mouseX = e.clientX, this.$root.mouseY = e.clientY;
-      if (this.$root.isDragging) {
-        Event.$emit('newAction', 'Click-drag')
+      if (!this.$root.isLinking) {
+        this.$root.mouseX = e.clientX, this.$root.mouseY = e.clientY;
+        if (this.$root.isDragging) {
+          Event.$emit('newAction', 'Click-drag')
+        } else {
+          if (((this.lastMouseX <= this.$root.mouseX + 6) && (this.lastMouseX >= this.$root.mouseX - 6)) && ((this.lastMouseY <= this.$root.mouseY + 6) && (this.lastMouseY >= this.$root.mouseY - 6)))
+            var nothing = '';
+          else 
+            Event.$emit('newAction', 'Mouse move');
+        }
+        this.$root.parseModifiers(e);
       } else {
-        if (((this.lastMouseX <= this.$root.mouseX + 6) && (this.lastMouseX >= this.$root.mouseX - 6)) && ((this.lastMouseY <= this.$root.mouseY + 6) && (this.lastMouseY >= this.$root.mouseY - 6)))
-          var nothing = '';
-        else 
-          Event.$emit('newAction', 'Mouse move');
+        // external data
       }
-      this.$root.parseModifiers(e);
     },
     onClickOutside(e, el) {
-      if (!this.wasDragging) {
-        Event.$emit('newAction', 'Mouse click');
+      if (!this.isLinking) {
+        if (!this.wasDragging) {
+          Event.$emit('newAction', 'Mouse click');
+        }
+      } else {
+        // external data
       }
     },
     onKeyDownOutside(e, el) {
-      this.$root.parseModifiers(e);
-      Event.$emit('keypress', e.key);
-      Event.$emit('newAction', 'keyDown');
+      if (!this.$root.isLinking) {
+        this.$root.parseModifiers(e);
+        Event.$emit('keypress', e.key);
+        Event.$emit('newAction', 'keyDown');
+      } else {
+        // external data
+      }
     },
     onKeyUpOutside(e, el) {
-      this.$root.parseModifiers(e);
-      Event.$emit('keypress', e.key);
-      Event.$emit('newAction', 'keyUp');
+      if (!this.$root.isLinking) {
+        this.$root.parseModifiers(e);
+        Event.$emit('keypress', e.key);
+        Event.$emit('newAction', 'keyUp');
+      } else {
+        // external data
+      }
     },
   },
   computed: {
@@ -653,6 +871,7 @@ Vue.component('scribe-maker', {
         ref="input"
         :class="getClass()"
         @keyup.enter="submitTest(msg)"
+        spellcheck="false"
         v-model="msg" 
         :placeholder="placeholder"/>
     </div>
@@ -732,6 +951,7 @@ Vue.component('scribe', {
       <input 
         ref="input"
         :class="getClass()"
+        spellcheck="false"
         @keyup.enter="submitTest(msg)" 
         v-model="msg" 
         :placeholder="placeholder"/>
@@ -898,6 +1118,7 @@ var app = new Vue({
     panelHeight: 200,
     mouseX: 0,
     mouseY: 0,
+    lastKey: 0,
     isDragging: false,
     persistent: true,
     // storage: window.localStorage,
@@ -908,6 +1129,8 @@ var app = new Vue({
     showSystem: true,
     showConsole: true,
     showDebug: true,
+    isLinking: true,
+    hasLink: false,
     isWake: false,
     Shift: false,
     Ctrl: false,
@@ -919,6 +1142,7 @@ var app = new Vue({
     context: {
       menu: [
         { id: "refresh", label: "Refresh panel", enabled: true, checkable: false, checked: false, },
+        { id: "isLinking", label: "Debug link", enabled: true, checkable: true, checked: true, },
         { label: "---" },
         { id: "showSize", label: "Show Size", enabled: true, checkable: true, checked: true, },
         { id: "showUser", label: "Show User", enabled: true, checkable: true, checked: true, },
@@ -943,18 +1167,16 @@ var app = new Vue({
   mounted() {
     var self = this;
     if (navigator.platform.indexOf('Win') > -1) { this.macOS = false; } else if (navigator.platform.indexOf('Mac') > -1) { this.macOS = true; }
-    // this.startStorage();
     this.readStorage();
     this.setContextMenu();
-    // this.handleResize(null);
-    // window.addEventListener('resize', this.handleResize);
-    // csInterface.addEventListener(CSInterface.THEME_COLOR_CHANGED_EVENT, self.appThemeChanged);
-    // this.appThemeChanged();
     Event.$on('modsUpdate', self.parseModifiers);
     Event.$on('updateStorage', self.updateStorage);
     Event.$on('deleteScribe', self.deleteScribe);
     Event.$on('checkScribe', self.checkExisting);
     Event.$on('addScribe', self.addScribe);
+    if (this.isLinking)
+      Event.$emit('debug.start');
+
   },
   methods: {
     dispatchEvent(name, data) {
@@ -967,7 +1189,11 @@ var app = new Vue({
       if (result < 0) {
         Event.$emit('verifyTest', true)
       } else {
-        console.log('Construct already exists')
+        if (data[1] == 'listener') {
+          console.log('Construct already exists')
+        } else {
+          Event.$emit('verifyTest', true)
+        }
       }
     },
     findScribe(data) {
@@ -998,10 +1224,21 @@ var app = new Vue({
       Event.$emit('rebuildEvents');
       this.updateStorage();
     },
-    startStorage(storage) {
-      storage.setItem('contextmenu', JSON.stringify(this.context.menu));
-      storage.setItem('eventList', JSON.stringify(self.eventList));
-      // storage.setItem('persistent', JSON.stringify(false));
+    setContextMenuMemory(storage) {
+      for (var i = 0; i < this.context.menu.length; i++) {
+        var target = this.context.menu[i], name = target.id;
+        if (target.checkable)
+          storage.setItem(name, this[name])
+      }
+    },
+    rememberContextMenu(storage) {
+      for (var i = 0; i < this.context.menu.length; i++) {
+        var target = this.context.menu[i], name = target.id;
+        if (target.checkable) {
+          this[name] = JSON.parse(storage.getItem(name))
+          this.context.menu[i].checked = this[name];
+        }
+      }
     },
     readStorage() {
       var storage = window.localStorage;
@@ -1011,33 +1248,20 @@ var app = new Vue({
         console.log('Detected previous session data');
         this.context.menu = JSON.parse(storage.getItem('contextmenu'));
         this.eventList = JSON.parse(storage.getItem('eventList'));
-        console.log(storage)
-        this.showSize = JSON.parse(storage.getItem('showSize'));
-        this.context.menu[2].checked = this.showSize;
-        this.showUser = JSON.parse(storage.getItem('showUser'));
-        this.context.menu[3].checked = this.showUser;
-        this.showSystem = JSON.parse(storage.getItem('showSystem'));
-        this.context.menu[4].checked = this.showSystem;
-        this.showConsole = JSON.parse(storage.getItem('showConsole'));
-        this.context.menu[5].checked = this.showConsole;
-        this.showDebug = JSON.parse(storage.getItem('showDebug'));
-        this.context.menu[6].checked = this.showDebug;
+        console.log(storage);
+        this.rememberContextMenu(storage)
       }
       Event.$emit('rebuildEvents');
     },
     updateStorage() {
       var storage = window.localStorage, self = this;
-      console.log('Updating local storage')
+      console.log('updated local storage')
       storage.setItem('contextmenu', JSON.stringify(self.context.menu));
       storage.setItem('eventList', JSON.stringify(self.eventList));
       storage.setItem('persistent', JSON.stringify(self.persistent));
-      storage.setItem('showSize', this.showSize);
-      storage.setItem('showUser', this.showUser);
-      storage.setItem('showSystem', this.showSystem);
-      storage.setItem('showConsole', this.showConsole);
-      storage.setItem('showDebug', this.showDebug);
       storage.setItem('theme', self.activeTheme);
-      console.log(storage)
+      this.setContextMenuMemory(storage);
+      // console.log(storage);
     },
     setContextMenu() {
       var self = this;
@@ -1054,11 +1278,17 @@ var app = new Vue({
         // console.log(testScript)
         // csInterface.evalScript(`runScript('${testScript}')`);
         loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
-
       } else {
         this[id] = !this[id];
         var target = this.findMenuItemById(id);
         target.checked = this[id];
+      }
+      if (id == 'isLinking') {
+        console.log(this.isLinking);
+        if (this.isLinking)
+          Event.$emit('debug.start');
+        else 
+          Event.$emit('debug.stop');
       }
       this.updateStorage();
     },

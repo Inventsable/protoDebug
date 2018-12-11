@@ -54,9 +54,8 @@ svg {
   align-items: flex-start;
   justify-content: space-between;
   /* height: var(--panel-height); */
-  height: 90vh;
+  height: 95vh;
   /* overflow-y: auto; */
-
 }
 
 .stat-groups {
@@ -105,6 +104,18 @@ svg {
 .window-size-card-idle {
   color: rgba(240,240,240,.75);
   background-color: rgba(180,180,180,.25);
+}
+
+.link-wrap {
+  display: flex;
+  justify-content: flex-start;
+  padding: .5rem;
+  height: 1.5rem;
+  user-select: none;
+  cursor: default;
+  background-color: var(--color-bg);
+  z-index: 100;
+  order: -2;
 }
 
 .window-size-x {
@@ -192,6 +203,10 @@ svg {
 textarea {
   resize: none;
   overflow: hidden;
+}
+
+#mainconsole {
+  resize: vertical;
 }
 
 .icon-statgrid {
@@ -325,12 +340,12 @@ textarea {
   }
 }
 
-@media screen and (max-height:200px) {
+@media screen and (max-width:200px) {
   .file-stats {
     display: grid;
     grid-template-columns: 1fr;
     grid-template-rows: 1fr 1fr;
-    grid-row-gap: .5rem;
+    /* grid-row-gap: .5rem; */
     grid-column-gap: .5rem;
     margin-right: .5rem;
     width: 100%;
