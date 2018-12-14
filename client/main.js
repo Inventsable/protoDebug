@@ -1,55 +1,31 @@
-// FINISH REAL-TIME LINK
-// Construct object with essential info like name, mousepos, panel dimensions, listeners and receivers.
+// Query notification with custom message retrieved via HTML
+// Build protoDebug, disable original and test debug.fetch in production build
+// Ensure template is up-to-date with protoBrowser
+// Check viability of iframe address retreival via postMessage
+// Find a way to open new window in default browser
 
-// Query target panel with SetInterval from protoDebug to send a CSEvent response, protoDebug then
-// reads the CSEvent and substitutes it's own $root values for them.
+// 
+
+// Check viability of appending second extension to ALL extensions, acting as solo debug or notification hub
 
 var csInterface = new CSInterface();
 loadUniversalJSXLibraries();
 loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
 window.Event = new Vue();
 
-csInterface.addEventListener('console', function (evt) {
-  console.log('Caught console')
-  console.log(evt);
-  Event.$emit('console.log', JSON.stringify(evt));
+csInterface.addEventListener('console', function (evt) { Event.$emit('console.log', JSON.stringify(evt)); });
+csInterface.addEventListener('debug.bounce', function(evt) { console.log(evt.data); });
+csInterface.addEventListener('debug.link', function(evt) { Event.$emit('debug.start', evt); });
+csInterface.addEventListener('debug.target', function (evt) { Event.$emit('debug.target', evt); });
+csInterface.addEventListener('debug.unlink', function(evt) { Event.$emit('requestUnlink', evt); });
+csInterface.addEventListener('debug.fetch', function(evt) { 
+  console.log('Was caught')
+  Event.$emit('fetch', evt); 
 });
-
-// csInterface.addEventListener('debug.sender', function (evt) {
-//   console.log('Caught global sender')
-//   console.log(evt);
-//   // var clone = JSON.parse(evt.data);
-//   // console.log(clone);
-//   Event.$emit('debug.link');
-//   // Event.$emit('console.log', JSON.stringify(evt));
-// });
-
-csInterface.addEventListener('debug.bounce', function(evt) {
-  console.log('Caught bounce')
-  console.log(evt.data);
-});
-
-csInterface.addEventListener('debug.link', function(evt) {
-  Event.$emit('debug.start', evt);
-});
-
-csInterface.addEventListener('debug.target', function (evt) {
-  Event.$emit('debug.target', evt);
-});
-
-csInterface.addEventListener('debug.unlink', function(evt) {
-  console.log('Check unlink');
-  Event.$emit('requestUnlink', evt);
-});
-
 csInterface.addEventListener('debug.listen', function (evt) {
   console.log('Caught global listener')
-  Event.$emit('console.full', evt);
-  console.log(evt)
   var clone = JSON.parse(evt.data);
   Event.$emit('updateClone', clone);
-  // Event.$on('debug.listen', self.startLink);
-  // Event.$emit('console.log', JSON.stringify(evt));
 });
 
 // Overring wake/sleep state to wake only
@@ -60,6 +36,7 @@ Vue.component('protodebug', {
       <stylizer />
       <screen>
         <top>
+          <notification v-if="hasNotification" :model="notification" />
           <window-size v-if="showSize" />
           <link-data v-if="showUser"/>
           <stats v-if="showUser">
@@ -76,8 +53,19 @@ Vue.component('protodebug', {
   `,
   data() {
     return {
+      hasNotification: false,
       wakeOnly: true,
       showFoot: false,
+      notification: {
+        data: '',
+        details: '',
+        notes: [
+          "dummy text 1",
+          "dummy text 2",
+          "dummy text 3"
+        ],
+        preview: 'https://via.placeholder.com/960x540/434343/b7b7b7',
+      }
     }
   },
   computed: {
@@ -101,7 +89,154 @@ Vue.component('protodebug', {
         this.$root.sleep();
         Event.$emit('clearStats');
       }
+    },
+    showNotification() {
+      console.log('show notify')
+      if (this.$root.notificationsEnabled) {
+        this.hasNotification = true;
+      }
+    },
+    hideNotification() {
+      console.log('hide notify')
+      this.$root.notificationsEnabled = false;
+      this.hasNotification = false;
+    },
+    constructUpdate(msg) {
+      this.notification = JSON.parse(msg);
+      console.log('constructed message is:')
+      console.log(this.notification);
+    },
+    nullifyUpdate() {
+      this.notification = null;
     }
+  },
+  mounted() {
+    Event.$on('showNotification', this.showNotification);
+    Event.$on('hideNotification', this.hideNotification);
+    Event.$on('promptUpdate', this.constructUpdate);
+    Event.$on('nullifyUpdate', this.nullifyUpdate);
+  }
+})
+
+Vue.component('notification-icon', {
+  props: {
+    type: String,
+  },
+  template: `
+    <div 
+      :class="type == 'cancel' ? 'note-icon' : 'note-icon'" 
+      @mouseover="hover = true" 
+      @mouseout="hover = false" 
+      @click="doAction">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+        <path v-if="type == 'cancel'" :style="iconColor" d="M29.24,25,41.12,13.12a3,3,0,0,0-4.24-4.24L25,20.76,13.12,8.88a3,3,0,0,0-4.24,4.24L20.76,25,8.88,36.88a3,3,0,0,0,0,4.24,3,3,0,0,0,4.24,0L25,29.24,36.88,41.12a3,3,0,0,0,4.24,0,3,3,0,0,0,0-4.24Z"/>
+        <path v-if="type == 'arrowRight'" :style="iconColor" d="M18,42a3,3,0,0,1-2.12-.88,3,3,0,0,1,0-4.24L27.76,25,15.88,13.12a3,3,0,0,1,4.24-4.24l14,14a3,3,0,0,1,0,4.24l-14,14A3,3,0,0,1,18,42Z"/>
+        <path v-if="type == 'arrowUp'" :style="iconColor" d="M39,35a3,3,0,0,1-2.12-.88L25,22.24,13.12,34.12a3,3,0,1,1-4.24-4.24l14-14a3,3,0,0,1,4.24,0l14,14a3,3,0,0,1,0,4.24A3,3,0,0,1,39,35Z"/>
+        <path v-if="type == 'arrowLeft'" :style="iconColor" d="M32,42a3,3,0,0,1-2.12-.88l-14-14a3,3,0,0,1,0-4.24l14-14a3,3,0,1,1,4.24,4.24L22.24,25,34.12,36.88a3,3,0,0,1,0,4.24A3,3,0,0,1,32,42Z"/>
+        <path v-if="type == 'arrowDown'" :style="iconColor" d="M25,35a3,3,0,0,1-2.12-.88l-14-14a3,3,0,1,1,4.24-4.24L25,27.76,36.88,15.88a3,3,0,1,1,4.24,4.24l-14,14A3,3,0,0,1,25,35Z"/>
+        <path v-if="type == 'menu'" :style="iconColor" d="M40,28H10a3,3,0,0,1,0-6H40a3,3,0,0,1,0,6Zm3-16a3,3,0,0,0-3-3H10a3,3,0,0,0,0,6H40A3,3,0,0,0,43,12Zm0,26a3,3,0,0,0-3-3H10a3,3,0,0,0,0,6H40A3,3,0,0,0,43,38Z"/>
+        <path v-if="type == 'info'" :style="iconColor" d="M25,4A21,21,0,1,0,46,25,21,21,0,0,0,25,4Zm0,35a3,3,0,1,1,3-3A3,3,0,0,1,25,39Zm1.52-9h-3L21.91,12.37a3.1,3.1,0,1,1,6.18,0Z"/>
+      </svg>
+    </div>
+  `,
+  data() {
+    return {
+      hover: false,
+    }
+  },
+  computed: {
+    iconColor: function () {
+      if (this.$root.isWake) {
+        // if ((this.type == 'cancel') && (this.hover)) {
+          // return `fill: ${this.$root.getCSS('color-note-icon')}`;
+        // } else {
+          return `fill: ${this.$root.getCSS('color-note-icon')}`;
+        // }
+      } else {
+        return `fill: ${this.$root.getCSS('color-text-disabled')}`;
+      }
+    }
+  },
+  methods: {
+    doAction() {
+      console.log(`Clicked on ${this.type}`)
+    }
+  }
+})
+
+Vue.component('notification', {
+  props: {
+    model: Object,
+  },
+  template: `
+    <div class="global-notification">
+      <div class="global-notification-wrap">
+        <div v-if="!alt" class="note-display">
+          <notification-icon type="info" />
+        </div>
+        <div class="note-header">
+          <div v-if="!hasDetails" class="global-notification-text">{{model.data}}</div>
+          <div v-if="hasDetails" class="global-notification-text">{{fulldetails}}</div>
+        </div>
+        <div class="note-cancel" @click="killNote">
+          <notification-icon type="cancel" />
+        </div>
+      </div>
+      <ul v-if="hasDetails" class="note-list">
+          <li v-for="(item,key) in model.notes" class="note-list-note">{{item}}</li>
+      </ul>
+      <div v-if="hasDetails" class="note-preview">
+        <div :style="getPreviewStyle(model.preview)"></div>
+      </div>
+      <div class="global-notification-wrap">
+        <div class="global-notification-toggle" @click="toggleTray" :style="styleTray()">
+          <notification-icon :type="hasDetails ? 'arrowUp' : 'arrowDown'" />
+        </div>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      alt: true,
+      hasDetails: false,
+      msg: 'Hello notification',
+    }
+  },
+  computed: {
+    fulldetails: function() {
+
+      return `${this.$root.rootName} ${this.model.details}`
+    }
+  },
+  methods: {
+    styleTray() {
+      return (this.hasDetails) ? `width: calc(100% - 3rem);` : `width: 100%;`;
+    },
+    getPreviewStyle(img) {
+      return `background-image: url(${img}); background-size: contain; background-repeat: norepeat; background-color: ${this.$root.getCSS('color-note-dark')}`;
+    },
+    toggleTray(el) {
+      console.log('Toggle tray');
+      this.hasDetails = !this.hasDetails;
+      // console.log();
+      // this.toggleScrollHeight(el.target.parentElement.parentNode)
+      console.log(this.hasDetails);
+    },
+    toggleScrollHeight(el) {
+      // el.classList.toggle('open');
+      // el.style.height = el.classList.contains('open') ? el.scrollHeight + 'px' : 0;
+    },
+    killNote() {
+      Event.$emit('hideNotification');
+      const targ = this.$root.findMenuItemById('notificationsEnabled');
+      console.log(targ);
+      targ.checked = false;
+      console.log(targ);
+      this.$root.setContextMenu();
+    }
+  },
+  mounted() {
+    console.log(this.msg);
   }
 })
 
@@ -556,11 +691,15 @@ Vue.component('console-info', {
     },
     fullInfo(msg) {
       this.info = msg.data;
+    },
+    stringInfo(msg) {
+      this.info = ` is ${msg}`;
     }
   },
   mounted() {
     Event.$on('console.log', this.setInfo);
     Event.$on('console.full', this.fullInfo);
+    Event.$on('console.string', this.stringInfo);
     var extId = csInterface.getSystemPath(SystemPath.EXTENSION);
     csInterface.evalScript(`setExt('${extId}')`)
   }
@@ -1114,6 +1253,9 @@ var app = new Vue({
   el: '#app',
   data: {
     macOS: false,
+    buildNumber: 0,
+    notificationsEnabled: true,
+    needsUpdate: false,
     panelWidth: 100,
     panelHeight: 200,
     mouseX: 0,
@@ -1143,6 +1285,7 @@ var app = new Vue({
       menu: [
         { id: "refresh", label: "Refresh panel", enabled: true, checkable: false, checked: false, },
         { id: "isLinking", label: "Debug link", enabled: true, checkable: true, checked: true, },
+        { id: "notificationsEnabled", label: "Show notifications", enabled: true, checkable: true, checked: true, },
         { label: "---" },
         { id: "showSize", label: "Show Size", enabled: true, checkable: true, checked: true, },
         { id: "showUser", label: "Show User", enabled: true, checkable: true, checked: true, },
@@ -1157,6 +1300,10 @@ var app = new Vue({
   },
   computed: {
     menuString: function () { return JSON.stringify(this.context); },
+    rootName: function () {
+      const str = csInterface.getSystemPath(SystemPath.EXTENSION);
+      return str.substring(str.lastIndexOf('/') + 1, str.length);
+    },
     isDefault: function () {
       var result = true;
       if ((this.Shift) | (this.Ctrl) | (this.Alt))
@@ -1174,11 +1321,64 @@ var app = new Vue({
     Event.$on('deleteScribe', self.deleteScribe);
     Event.$on('checkScribe', self.checkExisting);
     Event.$on('addScribe', self.addScribe);
+    Event.$on('fetch', self.getVersion);
+    Event.$on('checkHTMLData', self.checkHTMLData);
     if (this.isLinking)
       Event.$emit('debug.start');
-
+    this.getVersion();
+    this.tryFetch();
+    if (this.notificationsEnabled)
+      Event.$emit('showNotification');
+    else
+      Event.$emit('hideNotification');
   },
   methods: {
+    checkHTMLData(result) {
+      // console.log('Fetch result is...');
+      // console.log(result.master);
+      // console.log('This name is:');
+      // console.log(this.rootName);
+      for (let [key, value] of Object.entries(result.master)) {
+        if (key == this.rootName) {
+          console.log('Found match from HTML:');
+          if (value.version !== this.buildNumber) {
+            Event.$emit('promptUpdate', JSON.stringify(value));
+            Event.$emit('console.full', JSON.stringify(value))
+            this.needsUpdate = true;
+          } else {
+            Event.$emit('nullifyUpdate');
+            this.needsUpdate = false;
+          }
+        }
+      }
+    },
+    getVersion() {
+      const path = csInterface.getSystemPath(SystemPath.EXTENSION);
+      const xml = window.cep.fs.readFile(`${path}/CSXS/manifest.xml`);
+      const verID = /(\w|\<|\s|\=|\"|\.)*ExtensionBundleVersion\=\"(\d|\.)*(?=\")/;
+      let match = xml.data.match(verID);
+      if (match.length) {
+        const str = match[0].split(' ');
+        this.buildNumber = str[(str.length - 1)].replace(/\w*\=\"/, '');
+      } else {
+        this.buildNumber = 'unknown';
+      }
+      Event.$emit('console.string', this.buildNumber);
+    },
+    tryFetch() {
+      fetch('http://inventsable.cc/master.json')
+        .then(function (response) {
+          return response.json();
+        })
+        .then(function(myJson) {
+          console.log(myJson);
+          Event.$emit('checkHTMLData', myJson);
+        });
+      Event.$emit('console.full', this.buildNumber);
+    },
+    tryDownload() {
+      // 
+    },
     dispatchEvent(name, data) {
       var event = new CSEvent(name, 'APPLICATION');
       event.data = data;
@@ -1228,14 +1428,14 @@ var app = new Vue({
       for (var i = 0; i < this.context.menu.length; i++) {
         var target = this.context.menu[i], name = target.id;
         if (target.checkable)
-          storage.setItem(name, this[name])
+          storage.setItem(name, this[name]);
       }
     },
     rememberContextMenu(storage) {
       for (var i = 0; i < this.context.menu.length; i++) {
         var target = this.context.menu[i], name = target.id;
         if (target.checkable) {
-          this[name] = JSON.parse(storage.getItem(name))
+          this[name] = JSON.parse(storage.getItem(name));
           this.context.menu[i].checked = this[name];
         }
       }
@@ -1274,10 +1474,11 @@ var app = new Vue({
       } else if (id == 'homepage') {
         console.log('Go to github')
       } else if (id == 'test') {
-        console.log(id)
+        console.log('Tried to open new window')
+        window.open('https://www.inventsable.cc', '_blank')
         // console.log(testScript)
         // csInterface.evalScript(`runScript('${testScript}')`);
-        loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
+        // loadJSX(csInterface.hostEnvironment.appName + '/host.jsx');
       } else {
         this[id] = !this[id];
         var target = this.findMenuItemById(id);
@@ -1289,6 +1490,13 @@ var app = new Vue({
           Event.$emit('debug.start');
         else 
           Event.$emit('debug.stop');
+      }
+      if (id == 'notificationsEnabled') {
+        // console.log(this.notificationsEnabled);
+        if (this.notificationsEnabled)
+          Event.$emit('showNotification');
+        else
+          Event.$emit('hideNotification');
       }
       this.updateStorage();
     },

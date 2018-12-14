@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: none;
+      }
+
+      .cls-2 {
+        fill: #d60d0d;
+      }
+    </style>
+  </defs>
+  <title>info</title>
+  <g id="frame">
+    <rect class="cls-1" width="50" height="50"/>
+  </g>
+  <g id="notifications">
+    <path id="info" class="cls-2" d="M25,4A21,21,0,1,0,46,25,21,21,0,0,0,25,4Zm0,35a3,3,0,1,1,3-3A3,3,0,0,1,25,39Zm1.52-9h-3L21.91,12.37a3.1,3.1,0,1,1,6.18,0Z"/>
+  </g>
+</svg>
