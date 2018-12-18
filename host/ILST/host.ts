@@ -1,2 +1,1 @@
-// console.log('I display in Illustrator');
-// alert('Hello')
+// alert(app.name);
