@@ -1415,7 +1415,8 @@ var app = new Vue({
       if (storage.length) {
         this.context.menu = JSON.parse(storage.getItem('contextmenu'));
         this.eventList = JSON.parse(storage.getItem('eventList'));
-        this.rememberContextMenu(storage)
+        this.rememberContextMenu(storage);
+        Event.$emit('rebuildEvents');
       }
     },
     updateStorage() {
